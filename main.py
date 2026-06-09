@@ -1,21 +1,16 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from models import TarefaDB
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db, Base
 import schemas
+from sqlalchemy.orm import Session
 
 # Criação do aplicativo FastAPI
 app = FastAPI()
 
 # Criar as tabelas no banco de dados
-TarefaDB.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
-class Tarefa(BaseModel):
-    id: int
-    titulo: str
-    concluida: bool = False
-
-tarefas = []
 
 @app.get("/")
 def home():
@@ -26,23 +21,22 @@ def home():
     "/tarefas",
     response_model=list[schemas.TarefaResponse]
 )
-def listar_tarefas():
+def listar_tarefas(
 
-    db = SessionLocal()
+    db: Session = Depends(get_db)
+):
+    return db.query(TarefaDB).all()
 
-    tarefas = db.query(TarefaDB).all()
-
-    db.close()
-
-    return tarefas
+   
 
 @app.get(
     "/tarefas/{id}",
     response_model=schemas.TarefaResponse
 )
-def buscar_tarefa(id: int):
-
-    db = SessionLocal()
+def buscar_tarefa(
+    id: int, 
+    db: Session = Depends(get_db)
+    ):
 
     tarefa = (
         db.query(TarefaDB)
@@ -50,8 +44,7 @@ def buscar_tarefa(id: int):
         .first()
     )
 
-    db.close()
-
+  
     if not tarefa:
         raise HTTPException(
             status_code=404,
@@ -64,9 +57,8 @@ def buscar_tarefa(id: int):
     "/tarefas",
     response_model=schemas.TarefaResponse
 )
-def criar_tarefa(tarefa: schemas.TarefaCreate):
-    # Criar uma nova sessão de banco de dados
-    db = SessionLocal()
+def criar_tarefa(tarefa: schemas.TarefaCreate,  db: Session = Depends(get_db)):
+   
     # Criar uma nova tarefa no banco de dados
     nova_tarefa = TarefaDB(
         titulo=tarefa.titulo,
@@ -78,20 +70,20 @@ def criar_tarefa(tarefa: schemas.TarefaCreate):
     db.commit()
     # Atualizar a tarefa com o ID gerado pelo banco de dados
     db.refresh(nova_tarefa)
-    # Fechar a sessão de banco de dados
-    db.close()
-
+   
     return nova_tarefa
 
 @app.put(
     "/tarefas/{id}",
-    response_model=schemas.TarefaResponse
-)
+    response_model=schemas.TarefaResponse)
+
 def atualizar_tarefa(
     id: int,
-    tarefa_atualizada: schemas.TarefaCreate
+    tarefa_atualizada: schemas.TarefaCreate,
+    db: Session = Depends(get_db)
+    
 ):
-    db = SessionLocal()
+  
 
     tarefa = (
         db.query(TarefaDB)
@@ -118,11 +110,10 @@ def atualizar_tarefa(
 
     return tarefa
 
-@app.delete("/tarefas/{id}")
-def deletar_tarefa(id: int):
+@app.delete("/tarefas/{id}",)
+def deletar_tarefa(id: int,  db: Session = Depends(get_db)):
 
-    db = SessionLocal()
-
+  
     tarefa = (
         db.query(TarefaDB)
         .filter(TarefaDB.id == id)
