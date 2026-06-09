@@ -36,13 +36,29 @@ def listar_tarefas():
 
     return tarefas
 
-@app.get("/tarefas/{id}")
+@app.get(
+    "/tarefas/{id}",
+    response_model=schemas.TarefaResponse
+)
 def buscar_tarefa(id: int):
-    for tarefa in tarefas:
-        if tarefa["id"] == id:
-            return tarefa
-    
-    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+
+    db = SessionLocal()
+
+    tarefa = (
+        db.query(TarefaDB)
+        .filter(TarefaDB.id == id)
+        .first()
+    )
+
+    db.close()
+
+    if not tarefa:
+        raise HTTPException(
+            status_code=404,
+            detail="Tarefa não encontrada"
+        )
+
+    return tarefa
 
 @app.post(
     "/tarefas",
@@ -67,21 +83,66 @@ def criar_tarefa(tarefa: schemas.TarefaCreate):
 
     return nova_tarefa
 
-@app.put("/tarefas/{id}")
-def atualizar_tarefa(id: int, tarefa_atualiza: Tarefa):
-    for tarefa in tarefas:
-        if tarefa["id"] == id:
-            tarefa["titulo"] = tarefa_atualiza.titulo
-            tarefa["concluida"] = tarefa_atualiza.concluida
-            return tarefa
-    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+@app.put(
+    "/tarefas/{id}",
+    response_model=schemas.TarefaResponse
+)
+def atualizar_tarefa(
+    id: int,
+    tarefa_atualizada: schemas.TarefaCreate
+):
+    db = SessionLocal()
+
+    tarefa = (
+        db.query(TarefaDB)
+        .filter(TarefaDB.id == id)
+        .first()
+    )
+
+    if not tarefa:
+        db.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail="Tarefa não encontrada"
+        )
+
+    tarefa.titulo = tarefa_atualizada.titulo
+    tarefa.concluida = tarefa_atualizada.concluida
+
+    db.commit()
+
+    db.refresh(tarefa)
+
+    db.close()
+
+    return tarefa
 
 @app.delete("/tarefas/{id}")
-def deletar_tarefa(id:int):
-    for indice, tarefa in enumerate(tarefas):
-        if tarefa["id"] == id:
-            tarefa_removida = tarefas.pop(indice)
-            
-            return {"mensagem": "Tarefa deletada com sucesso", "tarefa": tarefa_removida
-                    }
-    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+def deletar_tarefa(id: int):
+
+    db = SessionLocal()
+
+    tarefa = (
+        db.query(TarefaDB)
+        .filter(TarefaDB.id == id)
+        .first()
+    )
+
+    if not tarefa:
+        db.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail="Tarefa não encontrada"
+        )
+
+    db.delete(tarefa)
+
+    db.commit()
+
+    db.close()
+
+    return {
+        "mensagem": "Tarefa removida com sucesso"
+    }
